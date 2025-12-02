@@ -18,14 +18,6 @@ check_doubled :: proc(input: int) -> bool {
 
 	second_part := input_string[part_length:]
 
-	fmt.printfln(
-		"input: %v => parts: %v - %v - partlength: %v",
-		input_string,
-		first_part,
-		second_part,
-		part_length,
-	)
-
 	if first_part == second_part {
 		fmt.println("Found One", input_string)
 		return true
@@ -36,7 +28,7 @@ check_doubled :: proc(input: int) -> bool {
 
 
 main :: proc() {
-	data := os.read_entire_file("input_small") or_else os.exit(1)
+	data := os.read_entire_file("input") or_else os.exit(1)
 	defer delete(data)
 	s := string(data)
 
@@ -45,7 +37,7 @@ main :: proc() {
 
 		id_pair := strings.split(id_pair_string, "-")
 		start_id := strconv.parse_int(id_pair[0]) or_else os.exit(1)
-		end_id := strconv.parse_int(id_pair[1]) or_else os.exit(1)
+		end_id := strconv.parse_int(strings.trim_space(id_pair[1])) or_else os.exit(1)
 
 		current_id := start_id
 		for current_id <= end_id {
