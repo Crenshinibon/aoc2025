@@ -6,7 +6,7 @@ import "core:strconv"
 import "core:strings"
 
 main :: proc() {
-	data := os.read_entire_file("input") or_else os.exit(1)
+	data := os.read_entire_file("input_small") or_else os.exit(1)
 	defer delete(data)
 	s := string(data)
 
