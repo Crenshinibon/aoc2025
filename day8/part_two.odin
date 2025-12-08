@@ -11,15 +11,15 @@ import rl "vendor:raylib"
 
 main :: proc() {
 
-	FILE :: "input_small"
-	TARGET :: 10
-	FACTOR :: 100
-	CAM_OFFSET :: 10
+	//FILE :: "input_small"
+	//TARGET :: 11
+	//FACTOR :: 100
+	//CAM_OFFSET :: 10
 
-	//FILE :: "input"
-	//TARGET :: 1000
-	//FACTOR :: 1000
-	//CAM_OFFSET :: 100
+	FILE :: "input"
+	TARGET :: 1000
+	FACTOR :: 1000
+	CAM_OFFSET :: 100
 
 	// read points from input
 	data := os.read_entire_file(FILE) or_else os.exit(1)
@@ -41,7 +41,7 @@ main :: proc() {
 
 	//setup raylib
 	rl.SetConfigFlags({.VSYNC_HINT, .WINDOW_RESIZABLE, .MSAA_4X_HINT})
-	rl.InitWindow(1000, 800, "XMAS - Lights")
+	rl.InitWindow(1600, 1200, "XMAS - Lights")
 	defer rl.CloseWindow()
 
 	max_x := f32(0)
@@ -81,6 +81,11 @@ main :: proc() {
 	slice.sort_by(distances[:], proc(a, b: Dist) -> bool {
 		return a.dist < b.dist
 	})
+
+	/*for d, i in distances {
+		fmt.println(i, "->", d)
+	}*/
+
 
 	Circuit :: struct {
 		points: [dynamic]rl.Vector3,
@@ -124,15 +129,12 @@ main :: proc() {
 			append(&target.dists, d)
 
 			source := &circuits[circ_j_idx]
-			//fmt.println("merging ----")
-			//fmt.println("target", target)
-			//fmt.println("source", source)
-
 			for p in source.points {
 				if !slice.contains(target.points[:], p) {
 					append(&target.points, p)
 				}
 			}
+
 			for d in source.dists {
 				if !slice.contains(target.dists[:], d) {
 					append(&target.dists, d)
@@ -141,59 +143,47 @@ main :: proc() {
 
 			unordered_remove(&circuits, circ_j_idx)
 		} else if circ_i_idx >= 0 {
-			//fmt.println("found i", d.p_i, " adding j", d.p_j)
-
 			c := &circuits[circ_i_idx]
 			append(&c.dists, d)
 			append(&c.points, d.p_j)
 
 		} else if circ_j_idx >= 0 {
-			//fmt.println("found j", d.p_j, " adding i", d.p_i)
-
 			c := &circuits[circ_j_idx]
 			append(&c.dists, d)
 			append(&c.points, d.p_i)
 
 		} else {
-			//other wise add new circuit
+			//otherwise add new circuit
 			c := Circuit {
 				points = [dynamic]rl.Vector3{d.p_i, d.p_j},
 				dists  = [dynamic]Dist{d},
 			}
-			//fmt.println("Nothing found, new circuit i:", d.p_i, " j:", d.p_j)
 			append(&circuits, c)
 		}
 
 
 		if i > TARGET && len(circuits) == 1 {
+			//check if all points are contained in the points list of the remaining circuit
+			contains_all := true
 			for p in points {
 				if !slice.contains(circuits[0].points[:], p) {
-					keep_going = false
+					contains_all = false
 					break
 				}
 			}
 
-			if !keep_going {
+			if contains_all {
+				keep_going = false
 				fmt.println("Final dist:", distances[i - 1])
 			}
 		}
 	}
 
-	slice.sort_by(circuits[:], proc(a, b: Circuit) -> bool {
-		return len(a.points) > len(b.points)
-	})
-
-	for d, i in circuits {
-		fmt.println("C: ", i, "-", d.points)
-		fmt.println("")
-		fmt.println("Dists: ", d.dists)
-		fmt.println("")
-	}
-
 
 	current_dist_index := 0
 	timer := f32(0.0)
-	duration_per_dist := f32(2.0) // How long to show each line (seconds)
+	duration_per_dist := f32(0.001) // How long to show each line (seconds)
+	paused := true
 
 	// do game loop
 	active_dists := [dynamic]Dist{}
@@ -212,10 +202,12 @@ main :: proc() {
 			timer = 0.0 // Reset timer
 
 			// Move to next line
-			current_dist_index += 1
+			if !paused {
+				current_dist_index += 1
+			}
 
 			// Loop back to the start if we reach the end
-			if current_dist_index >= len(lines) {
+			if current_dist_index >= len(distances) {
 				current_dist_index = 0
 			}
 		}
@@ -229,6 +221,9 @@ main :: proc() {
 		if rl.IsKeyDown(rl.KeyboardKey.DOWN) {
 			camera.fovy += 1
 		}
+		if rl.IsKeyDown(rl.KeyboardKey.SPACE) {
+			paused = !paused
+		}
 
 		for p, i in points {
 			rl.DrawCube(p, 0.3, 0.2, 0.2, rl.RED)
@@ -240,13 +235,11 @@ main :: proc() {
 			append(&active_dists, line)
 		}
 
-		rl.DrawCylinderEx(line.p_i, line.p_j, 0.1, 0.1, 8, rl.BLUE)
-
-		for c in circuits {
-			for d in c.dists {
-				if slice.contains(active_dists[:], d) {
-					rl.DrawCylinderEx(d.p_i, d.p_j, 0.1, 0.1, 8, rl.GREEN)
-				}
+		for d in circuits[0].dists {
+			if slice.contains(active_dists[:], d) {
+				rl.DrawCylinderEx(d.p_i, d.p_j, 0.1, 0.1, 8, rl.GREEN)
+			} else {
+				rl.DrawCylinderEx(line.p_i, line.p_j, 0.1, 0.1, 8, rl.BLUE)
 			}
 		}
 
