@@ -11,15 +11,15 @@ import rl "vendor:raylib"
 
 main :: proc() {
 
-	FILE :: "input_small"
-	TARGET :: 10
-	FACTOR :: 100
-	CAM_OFFSET :: 10
+	//FILE :: "input_small"
+	//TARGET :: 10
+	//FACTOR :: 100
+	//CAM_OFFSET :: 10
 
-	//FILE :: "input"
-	//TARGET :: 1000
-	//FACTOR :: 1000
-	//CAM_OFFSET :: 100
+	FILE :: "input"
+	TARGET :: 1000
+	FACTOR :: 1000
+	CAM_OFFSET :: 100
 
 	// read points from input
 	data := os.read_entire_file(FILE) or_else os.exit(1)
@@ -97,8 +97,8 @@ main :: proc() {
 		d := distances[i]
 
 		//remember circuits
-		existing_circ_i: Maybe(Circuit)
-		existing_circ_j: Maybe(Circuit)
+		circ_i_idx := -1
+		circ_j_idx := -1
 
 		for &c, c_idx in circuits {
 			//ignore distinances between points already part of a circuit
@@ -106,58 +106,61 @@ main :: proc() {
 				continue dist_loop
 			}
 
-			//
+			// we have a circuit, whos points include p_i
 			if slice.contains(c.points[:], d.p_i) {
-				if existing_circ_j == nil {
-					existing_circ_j = c
-					append(&c.dists, d)
-					append(&c.points, d.p_j)
+				circ_i_idx = c_idx
 
-					existing_circ_i = c
-				} else {
-					//merge circuits
-					ex_circ := &existing_circ_j.?
-
-					for p_a in c.points {
-						if !slice.contains(ex_circ.points[:], p_a) {
-							append(&ex_circ.points, p_a)
-						}
-					}
-					append(&ex_circ.dists, ..c.dists[:])
-					unordered_remove(&circuits, c_idx)
-
-					existing_circ_j = nil
-					continue dist_loop
-				}
 			}
-
 			if slice.contains(c.points[:], d.p_j) {
-				if existing_circ_j == nil {
-					append(&c.dists, d)
-					append(&c.points, d.p_i)
-					existing_circ_j = c
-				} else {
-					ex_circ := &existing_circ_j.?
-
-					for p_a in c.points {
-						if !slice.contains(ex_circ.points[:], p_a) {
-							append(&ex_circ.points, p_a)
-						}
-					}
-					append(&ex_circ.dists, ..c.dists[:])
-					unordered_remove(&circuits, c_idx)
-
-					existing_circ_j = nil
-					continue dist_loop
-				}
+				circ_j_idx = c_idx
 			}
 		}
 
-		//other wise add new circuit
-		append(
-			&circuits,
-			Circuit{points = [dynamic]rl.Vector3{d.p_i, d.p_j}, dists = [dynamic]Dist{d}},
-		)
+		//merge
+		if circ_i_idx >= 0 && circ_j_idx >= 0 {
+			target := &circuits[circ_i_idx]
+			append(&target.dists, d)
+
+			source := &circuits[circ_j_idx]
+			//fmt.println("merging ----")
+			//fmt.println("target", target)
+			//fmt.println("source", source)
+
+			for p in source.points {
+				if !slice.contains(target.points[:], p) {
+					append(&target.points, p)
+				}
+			}
+			for d in source.dists {
+				if !slice.contains(target.dists[:], d) {
+					append(&target.dists, d)
+				}
+			}
+
+			unordered_remove(&circuits, circ_j_idx)
+		} else if circ_i_idx >= 0 {
+			//fmt.println("found i", d.p_i, " adding j", d.p_j)
+
+			c := &circuits[circ_i_idx]
+			append(&c.dists, d)
+			append(&c.points, d.p_j)
+
+		} else if circ_j_idx >= 0 {
+			//fmt.println("found j", d.p_j, " adding i", d.p_i)
+
+			c := &circuits[circ_j_idx]
+			append(&c.dists, d)
+			append(&c.points, d.p_i)
+
+		} else {
+			//other wise add new circuit
+			c := Circuit {
+				points = [dynamic]rl.Vector3{d.p_i, d.p_j},
+				dists  = [dynamic]Dist{d},
+			}
+			//fmt.println("Nothing found, new circuit i:", d.p_i, " j:", d.p_j)
+			append(&circuits, c)
+		}
 	}
 
 	slice.sort_by(circuits[:], proc(a, b: Circuit) -> bool {
@@ -166,6 +169,9 @@ main :: proc() {
 
 	for d, i in circuits {
 		fmt.println("C: ", i, "-", d.points)
+		fmt.println("")
+		fmt.println("Dists: ", d.dists)
+		fmt.println("")
 	}
 
 	one := len(circuits[0].points)
