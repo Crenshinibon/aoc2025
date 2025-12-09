@@ -182,7 +182,7 @@ main :: proc() {
 
 	current_dist_index := 0
 	timer := f32(0.0)
-	duration_per_dist := f32(0.001) // How long to show each line (seconds)
+	duration_per_dist := f32(0.001) // How long to show each dist
 	paused := true
 
 	// do game loop
@@ -201,12 +201,11 @@ main :: proc() {
 		if timer >= duration_per_dist {
 			timer = 0.0 // Reset timer
 
-			// Move to next line
+			// Move to next line, if not paused
 			if !paused {
 				current_dist_index += 1
 			}
 
-			// Loop back to the start if we reach the end
 			if current_dist_index >= len(distances) {
 				current_dist_index = 0
 			}
