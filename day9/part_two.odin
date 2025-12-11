@@ -1,5 +1,6 @@
 package main
 
+import "core:container/intrusive/list"
 import "core:fmt"
 import "core:os"
 import "core:slice"
@@ -78,7 +79,7 @@ main :: proc() {
 		reds[i] = {x, y}
 	}
 
-	fmt.println(reds)
+	//fmt.println(reds)
 
 	//finding "greens" => reds that are connected on straight lines
 	Field :: struct {
@@ -88,45 +89,66 @@ main :: proc() {
 	fields := make([dynamic]Field, 0)
 	defer delete(fields)
 
-	//reds_to_remove := make([dynamic][2]int)
-	//defer delete(reds_to_remove)
 	max_x := 0
 	max_y := 0
 
-	for p in reds {
-		if p[0] > max_x do max_x = p[0]
-		if p[1] > max_y do max_y = p[1]
-	}
-
-	//for len(reds) > 0 {
 	for r in reds {
-		count_x := 0
-		count_y := 0
-		//	current_f := new(Field)
-		//	current_red := pop(&reds)
-
-		//find next red by following in all directions (same row / column)
-		//look in same row
-		for i in 0 ..= max_x {
-			for p in reds {
-				if p[0] == r[0] && p[1] != r[1] {
-					count_x += 1
-					fmt.println("Found another", p, r, count_x)
-				}
-			}
-		}
-		for i in 0 ..= max_y {
-			for p in reds {
-				if p[1] == r[1] && p[0] != r[0] {
-					count_y += 1
-					fmt.println("Found another", p, r, count_y)
-				}
-			}
-		}
+		if r[0] > max_x do max_x = r[0]
+		if r[1] > max_y do max_y = r[1]
 	}
 
 
-	/*
+	//reds_to_remove := make([dynamic][2]int)
+	//defer delete(reds_to_remove)
+	dirs := [4][2]int{{-1, 0}, {0, -1}, {1, 0}, {0, 1}}
+
+	for len(reds) > 0 {
+		current_field_reds := make([dynamic][2]int, 0, len(reds))
+
+		first_red := pop(&reds)
+		append(&current_field_reds, first_red)
+
+		cr := first_red
+
+		next_red_idx := 0
+		for next_red_idx > -1 {
+			next_red_idx = -1
+
+			//find arbitrary next red by following in one direction
+			//after the other starting at current pos
+			dir_loop: for d in dirs {
+				np := cr + d
+				for np[0] >= 0 && np[0] <= max_x && np[1] >= 0 && np[1] <= max_y {
+					np += d
+
+					for nr, i in reds {
+						if nr == np {
+							//fmt.println("Found next in dir", d, nr, i)
+							next_red_idx = i
+							break dir_loop
+						}
+					}
+				}
+				//fmt.println("Found none in dir:", d)
+			}
+
+			if (next_red_idx > -1) {
+				cr = reds[next_red_idx]
+				append(&current_field_reds, cr)
+
+				unordered_remove(&reds, next_red_idx)
+			}
+		}
+
+		current_f := Field {
+			reds = current_field_reds[:],
+		}
+		append(&fields, current_f)
+	}
+
+	fmt.println(fields, len(fields))
+
+	//find the biggest rectangle in all fields
 	Area :: struct {
 		c_1:    [2]int,
 		dist_x: int,
@@ -137,23 +159,25 @@ main :: proc() {
 
 	areas := make([dynamic]Area, 0, len(reds) * len(reds))
 
-	for p_1, i in reds {
-		for j := i + 1; j < len(reds); j += 1 {
-			p_2 := reds[j]
+	for f in fields {
+		for p_1, i in f.reds {
+			for j := i + 1; j < len(f.reds); j += 1 {
+				p_2 := f.reds[j]
 
-			dist_x := abs(p_1[0] - p_2[0]) + 1
-			dist_y := abs(p_1[1] - p_2[1]) + 1
+				dist_x := abs(p_1[0] - p_2[0]) + 1
+				dist_y := abs(p_1[1] - p_2[1]) + 1
 
-			append(
-				&areas,
-				Area {
-					c_1 = p_1,
-					c_2 = p_2,
-					dist_x = dist_x,
-					dist_y = dist_y,
-					area = dist_x * dist_y,
-				},
-			)
+				append(
+					&areas,
+					Area {
+						c_1 = p_1,
+						c_2 = p_2,
+						dist_x = dist_x,
+						dist_y = dist_y,
+						area = dist_x * dist_y,
+					},
+				)
+			}
 		}
 	}
 
@@ -161,7 +185,12 @@ main :: proc() {
 		return a.area > b.area
 	})
 
-  */
+	/*
+   * STILL NOT, presumably I also have to check if the resulting rectangle is completely
+   * "inside" the field. In my result I have one field, that includes both corners of 
+   * the solution from part one.
+   */
 
-	fmt.println("Result:")
+
+	fmt.println("Result:", areas[0])
 }
