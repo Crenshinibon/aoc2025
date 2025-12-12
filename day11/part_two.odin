@@ -6,9 +6,11 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
-main :: proc() {
-	START :: "svr"
-	TARGET :: "out"
+Path :: struct {
+	steps: [dynamic]string,
+}
+
+paths_between :: proc(start, target: string) -> queue.Queue(Path) {
 
 	data := os.read_entire_file("input") or_else os.exit(1)
 	defer delete(data)
@@ -16,9 +18,6 @@ main :: proc() {
 	s := string(data)
 	lines := strings.split_lines(s)
 
-	Path :: struct {
-		steps: [dynamic]string,
-	}
 	q: queue.Queue(Path)
 	queue.init(&q, len(lines))
 	defer queue.destroy(&q)
@@ -26,7 +25,7 @@ main :: proc() {
 	first_path := Path {
 		steps = make([dynamic]string, 1),
 	}
-	first_path.steps[0] = START
+	first_path.steps[0] = start
 
 	queue.push_back(&q, first_path)
 
@@ -36,7 +35,7 @@ main :: proc() {
 
 		current_path := queue.pop_front(&q)
 		last_element := current_path.steps[len(current_path.steps) - 1]
-		fmt.println("\ncurrent path:", current_path.steps, "last_element:", last_element)
+		//fmt.println("\ncurrent path:", current_path.steps, "last_element:", last_element)
 
 		for l in lines {
 			if strings.starts_with(l, last_element) {
@@ -45,7 +44,7 @@ main :: proc() {
 					new_step := parts[i]
 					//fmt.println("from", last_element, "to", new_step)
 
-					if new_step != TARGET {
+					if new_step != target {
 						//been here
 						if slice.contains(current_path.steps[:], new_step) {
 							fmt.println("LOOP detected")
@@ -65,7 +64,7 @@ main :: proc() {
 						queue.push_back(&q, Path{steps = new_steps})
 						keep_going = true
 					} else {
-						append(&current_path.steps, TARGET)
+						append(&current_path.steps, target)
 						queue.push_back(&q, current_path)
 					}
 				}
@@ -73,10 +72,22 @@ main :: proc() {
 		}
 	}
 
+	return q
+}
+
+
+main :: proc() {
+
+	paths_start_fft := paths_between("svr", "fft")
+	fmt.println("paths_start_fft", paths_start_fft)
+
+	paths_fft_dac := paths_between("fft", "dac")
+	fmt.println("paths_fft_dac", paths_fft_dac)
+
 	result := 0
-	for queue.len(q) > 0 {
+	/*
+    for queue.len(q) > 0 {
 		path := queue.pop_front(&q)
-		fmt.println(path)
 
 		found_dac := false
 		found_fft := false
@@ -94,6 +105,7 @@ main :: proc() {
 			result += 1
 		}
 	}
+  */
 
 	fmt.println("Result:", result)
 }
