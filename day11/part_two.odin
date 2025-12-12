@@ -3,6 +3,7 @@ package main
 import "core:container/queue"
 import "core:fmt"
 import "core:os"
+import "core:slice"
 import "core:strings"
 
 main :: proc() {
@@ -11,8 +12,6 @@ main :: proc() {
 
 	s := string(data)
 	lines := strings.split_lines(s)
-
-	result := 0
 
 	Path :: struct {
 		steps: [dynamic]string,
@@ -24,7 +23,7 @@ main :: proc() {
 	first_path := Path {
 		steps = make([dynamic]string, 1),
 	}
-	first_path.steps[0] = "you"
+	first_path.steps[0] = "svr"
 
 	queue.push_back(&q, first_path)
 
@@ -32,18 +31,15 @@ main :: proc() {
 	for keep_going {
 		keep_going = false
 
-
-		fmt.println("\nQ", q)
 		current_path := queue.pop_front(&q)
 		last_element := current_path.steps[len(current_path.steps) - 1]
 		fmt.println("\ncurrent path:", current_path, "last_element:", last_element)
-
 
 		for l in lines {
 			if strings.starts_with(l, last_element) {
 				parts := strings.split(l, " ")
 				for i := 1; i < len(parts); i += 1 {
-					if parts[i] != "out" {
+					if parts[i] != "out" && !slice.contains(current_path.steps[:], parts[i]) {
 						new_steps := make(
 							[dynamic]string,
 							len(current_path.steps),
@@ -56,6 +52,7 @@ main :: proc() {
 						queue.push_back(&q, Path{steps = new_steps})
 						keep_going = true
 					} else {
+						//append(&current_path.steps, "out")
 						queue.push_back(&q, current_path)
 					}
 				}
@@ -63,6 +60,27 @@ main :: proc() {
 		}
 	}
 
+	result := 0
+	for queue.len(q) > 0 {
+		path := queue.pop_front(&q)
+		fmt.println(path)
 
-	fmt.println("Result:", queue.len(q))
+		found_dac := false
+		found_fft := false
+
+		for s in path.steps {
+			if s == "dac" {
+				found_dac = true
+			}
+			if s == "fft" {
+				found_fft = true
+			}
+		}
+
+		if found_dac && found_fft {
+			result += 1
+		}
+	}
+
+	fmt.println("Result:", result)
 }

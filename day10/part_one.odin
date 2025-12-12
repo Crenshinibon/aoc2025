@@ -1,14 +1,12 @@
 package main
 import "core:container/queue"
 import "core:fmt"
-import "core:math"
 import "core:os"
-import "core:slice"
 import "core:strconv"
 import "core:strings"
 
 main :: proc() {
-	data := os.read_entire_file("input_tiny") or_else os.exit(1)
+	data := os.read_entire_file("input") or_else os.exit(1)
 	defer delete(data)
 	s := string(data)
 
@@ -76,19 +74,20 @@ main :: proc() {
 	result: uint = 0
 	//bfs for every machine
 	for mac in machines {
-		q := make([dynamic]uint, 0, mac.desired_state)
-		defer delete(q)
-		append(&q, 0)
+		q: queue.Queue(uint)
+		queue.init(&q, int(mac.desired_state))
+		defer queue.destroy(&q)
+		queue.push_back(&q, 0)
 
 		m: uint = 1 << mac.bit_width
 		min_adds := make([dynamic]uint, m)
 		defer delete(min_adds)
 		min_adds[0] = 0
 
-		outer: for i := 0; i < len(q); i += 1 {
-			fmt.println("q", q)
+		outer: for i := 0; i < queue.len(q); i += 1 {
+			//fmt.println("q", q)
 
-			current_sum := pop(&q)
+			current_sum := queue.pop_front(&q)
 			current_add := min_adds[current_sum]
 
 			for w in mac.button_wirings {
@@ -97,7 +96,7 @@ main :: proc() {
 					min_adds[next_sum] = current_add + 1
 				}
 
-				fmt.println(
+				/*fmt.println(
 					"\nnext_sum",
 					next_sum,
 					"current_sum",
@@ -108,16 +107,18 @@ main :: proc() {
 					current_add,
 					"\nsteps",
 					min_adds,
-				)
+				)*/
 				if next_sum == mac.desired_state {
 					// I cannot break for the first, but should, don't I do breath fist search then?
 					break outer
 				} else {
-					append(&q, next_sum)
+					queue.push_back(&q, next_sum)
 				}
 			}
 		}
-		result += min_adds[mac.desired_state]
+		to_add := min_adds[mac.desired_state]
+		fmt.println("M:", mac, "PRESSES:", to_add)
+		result += to_add
 	}
 	fmt.println("Result:", result)
 
