@@ -1,5 +1,6 @@
 package main
 
+import "core:encoding/cbor"
 import "core:fmt"
 import "core:os"
 import "core:slice"
@@ -7,132 +8,66 @@ import "core:strconv"
 import "core:strings"
 import rl "vendor:raylib"
 
+Point :: struct {
+	x, y: int,
+}
 
-main :: proc() {
+Line :: struct {
+	s, e: Point,
+}
 
-	/*
-   * ALL THIS WON'T WORK, because the grid would be fxxxxxx huge, which would require 38GB of memory
-   *
-	index :: proc(width, x, y: int) -> int {
-		return (width * y) + x
+Field :: struct {
+	reds:  []Point,
+	lines: []Line,
+}
+
+State :: struct {
+	fields: [dynamic]Field,
+	max_x:  int,
+	max_y:  int,
+	reds:   [dynamic]Point,
+}
+
+save_binary :: proc(state: State, filename: string) {
+	binary_data, err := cbor.marshal(state)
+	if err != nil {
+		fmt.println("Error marshalling state", err)
 	}
+	defer delete(binary_data)
 
-	print_floor :: proc(reds: [][2]int, blues: [][2]int) {
-
-		max_x := 0
-		max_y := 0
-
-		for p in reds {
-			if p[0] > max_x do max_x = p[0]
-			if p[1] > max_y do max_y = p[1]
-		}
-		width := max_x + 1
-		height := max_y + 1
-		fmt.println(width, height)
-
-
-		floor := make([dynamic]rune, width * height)
-		defer delete(floor)
-
-		slice.fill(floor[:], '.')
-
-		for p in reds {
-			idx := index(width, p[0], p[1])
-			fmt.println("putting # at idx:", idx, p)
-			floor[idx] = '#'
-		}
-
-		fmt.println("---------------")
-		for y := 0; y <= max_y; y += 1 {
-			for x := 0; x <= max_x; x += 1 {
-				idx := index(width, x, y)
-				r := floor[idx]
-				fmt.print(r)
-			}
-			fmt.print(".")
-			fmt.println("")
-		}
-
-		for _ in 0 ..= width {
-			fmt.print(".")
-		}
-
-		fmt.println("\n---------------")
+	success := os.write_entire_file(filename, transmute([]byte)binary_data)
+	if !success {
+		fmt.println("Failed to write file!")
 	}
-  */
-	save_binary :: proc(state: ^State, filename: string) {
-		// 1. Convert struct pointer to a byte slice
-		// We create a slice of bytes with length = size_of(State)
-		data_bytes := ([^]byte)(state)[:size_of(State)]
+}
 
-		// 2. Write directly to file
-		success := os.write_entire_file(filename, data_bytes)
-		if !success {
-			fmt.println("Failed to write file!")
-		}
+load_binary :: proc(filename: string) -> State {
+	state: State
+
+	data := os.read_entire_file(filename) or_else os.exit(1)
+	defer delete(data) // Clean up file buffer
+
+	err := cbor.unmarshal(string(data), &state)
+	if err != nil {
+		fmt.println("Error unmarshal state")
 	}
+	return state
+}
 
-	load_binary :: proc(filename: string) -> (State, bool) {
-		state: State
-
-		// 1. Read entire file
-		data, success := os.read_entire_file(filename)
-		if !success {return state, false}
-		defer delete(data) // Clean up file buffer
-
-		// 2. Safety check: Is the file size correct?
-		if len(data) != size_of(State) {
-			fmt.println("File size mismatch! Struct definition likely changed.")
-			return state, false
-		}
-
-		// 3. Copy bytes into the struct
-		// We get a pointer to the struct, cast to byte pointer, and copy memory
-		mem.copy(&state, raw_data(data), size_of(State))
-
-		return state, true
-	}
-	intersect :: proc(l1, l2: [2][2]int) -> bool {
-		l1_horizontal := l1[0][0] == l1[1][0]
-		l2_horizontal := l2[0][0] == l2[1][0]
-		if l1_horizontal == l2_horizontal do return false
-
-		if l1_horizontal {
-			x1 := min(l1[0][0], l1[1][0])
-			x2 := max(l1[0][0], l1[1][0])
-
-			y1 := min(l2[0][1], l2[1][1])
-			y2 := max(l2[0][1], l2[1][1])
-
-			return l2[0][0] > x1 && l2[0][0] < x2 && l1[0][1] > y1 && l1[0][1] < y2
-		} else {
-			x1 := min(l2[0][0], l2[1][0])
-			x2 := max(l2[0][0], l2[1][0])
-
-			y1 := min(l1[0][1], l1[1][1])
-			y2 := max(l1[0][1], l1[1][1])
-
-			return l1[0][0] > x1 && l1[0][0] < x2 && l2[0][1] > y1 && l2[0][1] < y2
-		}
-	}
-
-	count_intersections :: proc(l: [2][2]int, lines: [][2][2]int) -> int {
-		count := 0
-		for o_l in lines {
-			fmt.println("check intersect:", l, o_l)
-			if intersect(l, o_l) do count += 1
-		}
-		return count
-	}
-
-	data := os.read_entire_file("input") or_else os.exit(1)
+calc_fields :: proc(
+	allocator := context.allocator,
+) -> (
+	fields: [dynamic]Field,
+	reds: [dynamic]Point,
+	max_x: int,
+	max_y: int,
+) {
+	data := os.read_entire_file("input", allocator) or_else os.exit(1)
 	defer delete(data)
 	s := string(data)
 
-
 	lines := strings.split_lines(s)
-	reds := make([dynamic][2]int, len(lines) - 1)
-	defer delete(reds)
+	reds = make([dynamic]Point, len(lines) - 1, allocator)
 
 	for l, i in lines {
 		if len(l) == 0 do break
@@ -142,31 +77,25 @@ main :: proc() {
 
 		reds[i] = {x, y}
 	}
+	fields = make([dynamic]Field, 0, allocator)
 
-	Field :: struct {
-		reds:  [][2]int,
-		lines: [][2][2]int,
-	}
-
-	fields := make([dynamic]Field, 0)
-	defer delete(fields)
-
-	max_x := 0
-	max_y := 0
+	max_x = 0
+	max_y = 0
 
 	for r in reds {
-		if r[0] > max_x do max_x = r[0]
-		if r[1] > max_y do max_y = r[1]
+		if r.x > max_x do max_x = r.x
+		if r.y > max_y do max_y = r.y
 	}
 
 
 	//reds_to_remove := make([dynamic][2]int)
 	//defer delete(reds_to_remove)
+	//
 	dirs := [4][2]int{{-1, 0}, {0, -1}, {1, 0}, {0, 1}}
-
 	for len(reds) > 0 {
-		current_field_reds := make([dynamic][2]int, 0, len(reds))
-		current_field_lines := make([dynamic][2][2]int, 0, len(reds) / 2)
+
+		current_field_reds := make([dynamic]Point, 0, len(reds))
+		current_field_lines := make([dynamic]Line, 0, len(reds) / 2)
 
 		first_red := pop(&reds)
 		append(&current_field_reds, first_red)
@@ -180,9 +109,13 @@ main :: proc() {
 			//find arbitrary next red by following in one direction
 			//after the other starting at current pos
 			dir_loop: for d in dirs {
-				np := cr + d
-				for np[0] >= 0 && np[0] <= max_x && np[1] >= 0 && np[1] <= max_y {
-					np += d
+				np := Point {
+					x = cr.x + d[0],
+					y = cr.y + d[1],
+				}
+				for np.x >= 0 && np.x <= max_x && np.y >= 0 && np.y <= max_y {
+					np.x += d[0]
+					np.y += d[1]
 
 					for nr, i in reds {
 						if nr == np {
@@ -198,7 +131,7 @@ main :: proc() {
 			if (next_red_idx > -1) {
 				nr := reds[next_red_idx]
 				//append line
-				append(&current_field_lines, [2][2]int{cr, nr})
+				append(&current_field_lines, Line{s = cr, e = nr})
 
 				cr = nr
 				append(&current_field_reds, cr)
@@ -207,7 +140,7 @@ main :: proc() {
 		}
 
 		//add final closing line
-		append(&current_field_lines, [2][2]int{cr, first_red})
+		append(&current_field_lines, Line{s = cr, e = first_red})
 
 		current_f := Field {
 			reds  = current_field_reds[:],
@@ -217,12 +150,76 @@ main :: proc() {
 	}
 
 	fmt.println(fields, len(fields))
+	return
+}
+
+
+intersect :: proc(l1: [2][2]int, line: Line) -> bool {
+	l2 := [2][2]int{{line.s.x, line.s.y}, {line.e.x, line.e.y}}
+
+	l1_horizontal := l1[0][0] == l1[1][0]
+	l2_horizontal := l2[0][0] == l2[1][0]
+	if l1_horizontal == l2_horizontal do return false
+
+	if l1_horizontal {
+		x1 := min(l1[0][0], l1[1][0])
+		x2 := max(l1[0][0], l1[1][0])
+
+		y1 := min(l2[0][1], l2[1][1])
+		y2 := max(l2[0][1], l2[1][1])
+
+		return l2[0][0] > x1 && l2[0][0] < x2 && l1[0][1] > y1 && l1[0][1] < y2
+	} else {
+		x1 := min(l2[0][0], l2[1][0])
+		x2 := max(l2[0][0], l2[1][0])
+
+		y1 := min(l1[0][1], l1[1][1])
+		y2 := max(l1[0][1], l1[1][1])
+
+		return l1[0][0] > x1 && l1[0][0] < x2 && l2[0][1] > y1 && l2[0][1] < y2
+	}
+}
+
+count_intersections :: proc(l: [2][2]int, lines: []Line) -> int {
+	count := 0
+	for o_l in lines {
+		fmt.println("check intersect:", l, o_l)
+		if intersect(l, o_l) do count += 1
+	}
+	return count
+}
+
+main :: proc() {
+
+	path := "state.bin"
+
+	fields: [dynamic]Field
+	reds: [dynamic]Point
+	max_x: int
+	max_y: int
+
+	if os.is_file(path) {
+		state := load_binary(path)
+		fields = state.fields
+		reds = state.reds
+		max_x = state.max_x
+		max_y = state.max_y
+	} else {
+		fields, reds, max_x, max_y = calc_fields(context.allocator)
+		state := State {
+			fields = fields,
+			reds   = reds,
+			max_x  = max_x,
+			max_y  = max_y,
+		}
+		save_binary(state, path)
+	}
 
 	//find the biggest rectangle in all fields
 	Area :: struct {
-		c_1:    [2]int,
+		c_1:    Point,
 		dist_x: int,
-		c_2:    [2]int,
+		c_2:    Point,
 		dist_y: int,
 		area:   int,
 	}
@@ -239,12 +236,12 @@ main :: proc() {
 				//no other "red" can be "inside" this rect
 				for o_r in f.reds {
 
-					if p_1[1] > p_2[1] {
-						if o_r[1] > p_1[1] || o_r[1] < p_2[1] {
+					if p_1.y > p_2.y {
+						if o_r.y > p_1.y || o_r.y < p_2.y {
 							continue inner_reds_loop
 						}
-					} else if p_1[1] < p_2[1] {
-						if o_r[1] < p_1[1] || o_r[1] > p_2[1] {
+					} else if p_1.y < p_2.y {
+						if o_r.y < p_1.y || o_r.y > p_2.y {
 							continue inner_reds_loop
 						}
 					} else {
@@ -252,12 +249,12 @@ main :: proc() {
 						continue inner_reds_loop
 					}
 
-					if p_1[0] > p_2[0] {
-						if o_r[0] > p_1[0] || o_r[0] < p_2[0] {
+					if p_1.x > p_2.x {
+						if o_r.x > p_1.x || o_r.x < p_2.x {
 							continue inner_reds_loop
 						}
-					} else if p_1[0] < p_2[0] {
-						if o_r[0] < p_1[0] || o_r[0] > p_2[0] {
+					} else if p_1.x < p_2.x {
+						if o_r.x < p_1.x || o_r.x > p_2.x {
 							continue inner_reds_loop
 						}
 					} else {
@@ -267,7 +264,7 @@ main :: proc() {
 				}
 
 				//the rect actually has to span over the field
-				center := [2]int{(p_1[0] + p_2[0]) / 2, (p_1[1] + p_2[1]) / 2}
+				center := [2]int{(p_1.x + p_2.x) / 2, (p_1.y + p_2.y) / 2}
 				left_line := [2][2]int{center, {0, center[1]}}
 				right_line := [2][2]int{center, {center[1], max_y}}
 				top_line := [2][2]int{center, {center[0], 0}}
@@ -286,8 +283,8 @@ main :: proc() {
 				count_bottom := count_intersections(bottom_line, f.lines[:])
 				//if count_bottom % 2 == 0 do continue inner_reds_loop
 
-				dist_x := abs(p_1[0] - p_2[0]) + 1
-				dist_y := abs(p_1[1] - p_2[1]) + 1
+				dist_x := abs(p_1.x - p_2.x) + 1
+				dist_y := abs(p_1.y - p_2.y) + 1
 
 				append(
 					&areas,
@@ -308,76 +305,53 @@ main :: proc() {
 		return a.area > b.area
 	})
 
-	current_dist_index := 0
-	current_field_index := 0
-
-	timer := f32(0.0)
-	duration_per_dist := f32(0.001) // How long to show each dist
-	paused := true
-
-	// do game loop
-	active_dists := [dynamic][2][2]int{}
-	defer delete(active_dists)
-
-	//setup raylib
 	rl.SetConfigFlags({.VSYNC_HINT, .WINDOW_RESIZABLE, .MSAA_4X_HINT})
 	rl.InitWindow(1600, 1200, "XMAS Tiles")
 	defer rl.CloseWindow()
 
-	design_width := i32(max_x)
-	design_height := i32(max_y)
+	design_width := f32(max_x)
+	design_height := f32(max_y)
 
 	camera := rl.Camera2D{}
 	// have to visualize this I fear
 	for !rl.WindowShouldClose() {
 		rl.ClearBackground(rl.RAYWHITE)
-		current_field := fields[current_dist_index]
 
-		screen_w := rl.GetScreenWidth()
-		screen_h := rl.GetScreenHeight()
-
-		scale := min(screen_w / design_width, screen_h / design_height)
-		camera.zoom = f32(scale)
-		camera.offset = {
-			f32(screen_w - design_width * scale) * 0.5,
-			f32(screen_h - design_height * scale) * 0.5,
-		}
-		timer += rl.GetFrameTime()
-
-		// Check if the duration has passed
-		if timer >= duration_per_dist {
-			timer = 0.0 // Reset timer
-
-			// Move to next line, if not paused
-			if !paused {
-				current_dist_index += 1
-			}
-
-			if current_dist_index >= len(current_field.lines) {
-				current_dist_index = 0
-
-				if (current_field_index >= len(fields)) {
-					current_field_index = 0
-				} else {
-					current_field_index += 1
-				}
-			}
-		}
+		screen_w := f32(rl.GetScreenWidth())
+		screen_h := f32(rl.GetScreenHeight())
+		scale := min(f32(screen_w) / f32(design_width), f32(screen_h) / f32(design_height))
+		camera.zoom = scale
 
 		rl.BeginDrawing()
 		rl.BeginMode2D(camera)
 
-		line := current_field.lines[current_dist_index]
-		if !slice.contains(active_dists[:], line) {
-			append(&active_dists, line)
+		rl.DrawRectangle(0, 0, 800, 600, rl.BLACK)
+
+		for field in fields {
+
+			for line in field.lines {
+
+				start := rl.Vector2{f32(line.s.x), f32(line.s.y)}
+				end := rl.Vector2{f32(line.e.x), f32(line.e.y)}
+
+				rl.DrawLineEx(start, end, 6.0 / scale, rl.GREEN)
+			}
 		}
 
-		rl.DrawLine(i32(line[0][0]), i32(line[0][1]), i32(line[1][0]), i32(line[1][1]), rl.GREEN)
+		for a in areas {
+			rec := rl.Rectangle {
+				x      = min(f32(a.c_1.x), f32(a.c_1.x)),
+				y      = min(f32(a.c_2.y), f32(a.c_2.y)),
+				width  = abs(f32(a.c_1.y - a.c_2.y)),
+				height = abs(f32(a.c_1.x - a.c_2.x)),
+			}
+			rl.DrawRectangleLinesEx(rec, 3.0 / scale, rl.BLUE)
+		}
+
 
 		rl.EndMode2D()
 		rl.EndDrawing()
 	}
-
 
 	//fmt.println("Result:", areas[0])
 }
