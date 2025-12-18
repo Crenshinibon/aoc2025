@@ -93,9 +93,9 @@ calc_fields :: proc(
 		VERTICAL,
 	}
 
-	slice.sort_by(reds[:], proc(a, b: Point) -> bool {
-		return a.x + a.y > b.x + b.y
-	})
+	//slice.sort_by(reds[:], proc(a, b: Point) -> bool {
+	//	return a.x + a.y > b.x + b.y
+	//})
 
 	// we have to change dimensions, every encounter
 	current_dir: DIR = .UNDEFINED
@@ -117,6 +117,7 @@ calc_fields :: proc(
 
 			// at the start consider all directions
 			if current_dir == .UNDEFINED {
+				fmt.println("Exploring in all dirs", cr)
 				dir_loop: for d in dirs {
 					np := Point {
 						x = cr.x + d[0],
@@ -131,8 +132,10 @@ calc_fields :: proc(
 								//fmt.println("Found next in dir", d, nr, i)
 								if cr.x == nr.x {
 									current_dir = .HORIZONTAL
+									fmt.println("Next Horizontal", np)
 								} else {
 									current_dir = .VERTICAL
+									fmt.println("Next Vertical", np)
 								}
 
 								next_red_idx = i
@@ -143,6 +146,8 @@ calc_fields :: proc(
 					//fmt.println("Found none in dir:", d)
 				}
 			} else if current_dir == .VERTICAL {
+
+				fmt.println("Switching to Horizontal", cr)
 				// look horizontally to the right
 				found := false
 
@@ -156,10 +161,12 @@ calc_fields :: proc(
 
 					for nr, i in reds {
 						if nr == np {
+							fmt.println("Found Horiontal RIGHT", np)
 
 							current_dir = .HORIZONTAL
 							next_red_idx = i
 							found = true
+							break
 						}
 					}
 				}
@@ -177,14 +184,17 @@ calc_fields :: proc(
 						for nr, i in reds {
 							if nr == np {
 
+								fmt.println("Found Horizontal LEFT", np)
 								current_dir = .HORIZONTAL
 								next_red_idx = i
+								break
 							}
 						}
 					}
 				}
 
 			} else if current_dir == .HORIZONTAL {
+				fmt.println("Switching to Vertical", cr)
 				found := false
 
 				np := Point {
@@ -197,10 +207,12 @@ calc_fields :: proc(
 
 					for nr, i in reds {
 						if nr == np {
+							fmt.println("Found Vertical DOWN", np)
 
 							current_dir = .VERTICAL
 							next_red_idx = i
 							found = true
+							break
 						}
 					}
 				}
@@ -218,8 +230,10 @@ calc_fields :: proc(
 						for nr, i in reds {
 							if nr == np {
 
+								fmt.println("Found Vertical UP", np)
 								current_dir = .VERTICAL
 								next_red_idx = i
+								break
 							}
 						}
 					}
