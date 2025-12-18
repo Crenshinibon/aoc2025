@@ -62,7 +62,7 @@ calc_fields :: proc(
 	max_x: int,
 	max_y: int,
 ) {
-	data := os.read_entire_file("input", allocator) or_else os.exit(1)
+	data := os.read_entire_file("input_small", allocator) or_else os.exit(1)
 	defer delete(data)
 	s := string(data)
 
@@ -87,11 +87,20 @@ calc_fields :: proc(
 		if r.y > max_y do max_y = r.y
 	}
 
+	DIR :: enum {
+		UNDEFINED,
+		HORIZONTAL,
+		VERTICAL,
+	}
 
-	//reds_to_remove := make([dynamic][2]int)
-	//defer delete(reds_to_remove)
-	//
-	dirs := [4][2]int{{-1, 0}, {0, -1}, {1, 0}, {0, 1}}
+	slice.sort_by(reds[:], proc(a, b: Point) -> bool {
+		return a.x + a.y > b.x + b.y
+	})
+
+	// we have to change dimensions, every encounter
+	current_dir: DIR = .UNDEFINED
+	dirs :: [4][2]int{{0, -1}, {0, 1}, {-1, 0}, {1, 0}}
+
 	for len(reds) > 0 {
 
 		current_field_reds := make([dynamic]Point, 0, len(reds))
@@ -106,26 +115,115 @@ calc_fields :: proc(
 		for next_red_idx > -1 {
 			next_red_idx = -1
 
-			//find arbitrary next red by following in one direction
-			//after the other starting at current pos
-			dir_loop: for d in dirs {
-				np := Point {
-					x = cr.x + d[0],
-					y = cr.y + d[1],
+			// at the start consider all directions
+			if current_dir == .UNDEFINED {
+				dir_loop: for d in dirs {
+					np := Point {
+						x = cr.x + d[0],
+						y = cr.y + d[1],
+					}
+					for np.x >= 0 && np.x <= max_x && np.y >= 0 && np.y <= max_y {
+						np.x += d[0]
+						np.y += d[1]
+
+						for nr, i in reds {
+							if nr == np {
+								//fmt.println("Found next in dir", d, nr, i)
+								if cr.x == nr.x {
+									current_dir = .HORIZONTAL
+								} else {
+									current_dir = .VERTICAL
+								}
+
+								next_red_idx = i
+								break dir_loop
+							}
+						}
+					}
+					//fmt.println("Found none in dir:", d)
 				}
-				for np.x >= 0 && np.x <= max_x && np.y >= 0 && np.y <= max_y {
-					np.x += d[0]
-					np.y += d[1]
+			} else if current_dir == .VERTICAL {
+				// look horizontally to the right
+				found := false
+
+				np := Point {
+					x = cr.x + 1,
+					y = cr.y,
+				}
+
+				for np.x <= max_x {
+					np.x += 1
 
 					for nr, i in reds {
 						if nr == np {
-							//fmt.println("Found next in dir", d, nr, i)
+
+							current_dir = .HORIZONTAL
 							next_red_idx = i
-							break dir_loop
+							found = true
 						}
 					}
 				}
-				//fmt.println("Found none in dir:", d)
+
+				// if not found go to the left
+				if !found {
+					np := Point {
+						x = cr.x - 1,
+						y = cr.y,
+					}
+
+					for np.x >= 0 {
+						np.x -= 1
+
+						for nr, i in reds {
+							if nr == np {
+
+								current_dir = .HORIZONTAL
+								next_red_idx = i
+							}
+						}
+					}
+				}
+
+			} else if current_dir == .HORIZONTAL {
+				found := false
+
+				np := Point {
+					x = cr.x,
+					y = cr.y + 1,
+				}
+
+				for np.y <= max_y {
+					np.y += 1
+
+					for nr, i in reds {
+						if nr == np {
+
+							current_dir = .VERTICAL
+							next_red_idx = i
+							found = true
+						}
+					}
+				}
+
+				// if not found go to the left
+				if !found {
+					np := Point {
+						x = cr.x,
+						y = cr.y - 1,
+					}
+
+					for np.y >= 0 {
+						np.y -= 1
+
+						for nr, i in reds {
+							if nr == np {
+
+								current_dir = .VERTICAL
+								next_red_idx = i
+							}
+						}
+					}
+				}
 			}
 
 			if (next_red_idx > -1) {
@@ -149,7 +247,14 @@ calc_fields :: proc(
 		append(&fields, current_f)
 	}
 
-	fmt.println(fields, len(fields))
+
+	fmt.println(len(fields))
+	for f in fields {
+		fmt.println(f.lines)
+		fmt.println("---")
+		fmt.println(f.reds)
+		fmt.println("---")
+	}
 	return
 }
 
@@ -325,8 +430,6 @@ main :: proc() {
 		rl.BeginDrawing()
 		rl.BeginMode2D(camera)
 
-		rl.DrawRectangle(0, 0, 800, 600, rl.BLACK)
-
 		for field in fields {
 
 			for line in field.lines {
@@ -352,6 +455,4 @@ main :: proc() {
 		rl.EndMode2D()
 		rl.EndDrawing()
 	}
-
-	//fmt.println("Result:", areas[0])
 }
