@@ -99,7 +99,9 @@ calc_fields :: proc(
 
 	// we have to change dimensions, every encounter
 	current_dir: DIR = .UNDEFINED
-	dirs :: [4][2]int{{0, -1}, {0, 1}, {-1, 0}, {1, 0}}
+	UNDEFINED_DIRS :: [4]Point{{0, -1}, {0, 1}, {-1, 0}, {1, 0}}
+	HORIZONTAL_DIRS :: [2]Point{{1, 0}, {-1, 0}}
+	VERTICAL_DIRS :: [2]Point{{0, 1}, {0, -1}}
 
 	for len(reds) > 0 {
 
@@ -117,25 +119,22 @@ calc_fields :: proc(
 
 			// at the start consider all directions
 			if current_dir == .UNDEFINED {
-				fmt.println("Exploring in all dirs", cr)
-				dir_loop: for d in dirs {
+				dir_loop: for d in UNDEFINED_DIRS {
 					np := Point {
-						x = cr.x + d[0],
-						y = cr.y + d[1],
+						x = cr.x + d.x,
+						y = cr.y + d.y,
 					}
 					for np.x >= 0 && np.x <= max_x && np.y >= 0 && np.y <= max_y {
-						np.x += d[0]
-						np.y += d[1]
+						np.x += d.x
+						np.y += d.y
 
 						for nr, i in reds {
 							if nr == np {
 								//fmt.println("Found next in dir", d, nr, i)
 								if cr.x == nr.x {
-									current_dir = .HORIZONTAL
-									fmt.println("Next Horizontal", np)
-								} else {
 									current_dir = .VERTICAL
-									fmt.println("Next Vertical", np)
+								} else {
+									current_dir = .HORIZONTAL
 								}
 
 								next_red_idx = i
@@ -147,93 +146,43 @@ calc_fields :: proc(
 				}
 			} else if current_dir == .VERTICAL {
 
-				fmt.println("Switching to Horizontal", cr)
-				// look horizontally to the right
-				found := false
+				dir_loop_horizontal: for d in HORIZONTAL_DIRS {
 
-				np := Point {
-					x = cr.x + 1,
-					y = cr.y,
-				}
-
-				for np.x <= max_x {
-					np.x += 1
-
-					for nr, i in reds {
-						if nr == np {
-							fmt.println("Found Horiontal RIGHT", np)
-
-							current_dir = .HORIZONTAL
-							next_red_idx = i
-							found = true
-							break
-						}
-					}
-				}
-
-				// if not found go to the left
-				if !found {
 					np := Point {
-						x = cr.x - 1,
+						x = cr.x + d.x,
 						y = cr.y,
 					}
 
-					for np.x >= 0 {
-						np.x -= 1
+					for np.x <= max_x && np.x >= 0 {
+						np.x += d.x
 
 						for nr, i in reds {
 							if nr == np {
-
-								fmt.println("Found Horizontal LEFT", np)
 								current_dir = .HORIZONTAL
 								next_red_idx = i
-								break
+								break dir_loop_horizontal
 							}
 						}
 					}
 				}
 
 			} else if current_dir == .HORIZONTAL {
-				fmt.println("Switching to Vertical", cr)
-				found := false
+				dir_loop_vertical: for d in VERTICAL_DIRS {
 
-				np := Point {
-					x = cr.x,
-					y = cr.y + 1,
-				}
-
-				for np.y <= max_y {
-					np.y += 1
-
-					for nr, i in reds {
-						if nr == np {
-							fmt.println("Found Vertical DOWN", np)
-
-							current_dir = .VERTICAL
-							next_red_idx = i
-							found = true
-							break
-						}
-					}
-				}
-
-				// if not found go to the left
-				if !found {
 					np := Point {
 						x = cr.x,
-						y = cr.y - 1,
+						y = cr.y + d.y,
 					}
 
-					for np.y >= 0 {
-						np.y -= 1
+
+					for np.y <= max_y && np.y >= 0 {
+						np.y += d.y
 
 						for nr, i in reds {
 							if nr == np {
-
-								fmt.println("Found Vertical UP", np)
 								current_dir = .VERTICAL
 								next_red_idx = i
-								break
+								break dir_loop_vertical
 							}
 						}
 					}
@@ -418,6 +367,7 @@ main :: proc() {
 			}
 		}
 	}
+	fmt.println("areas", areas)
 
 
 	slice.sort_by(areas[:], proc(a, b: Area) -> bool {
