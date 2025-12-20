@@ -221,6 +221,44 @@ calc_fields :: proc(
 	return
 }
 
+greedy_intersect_lines :: proc(line1, line2: Line) -> bool {
+	l1 := [2][2]int{{line1.s.x, line1.s.y}, {line1.e.x, line1.e.y}}
+	l2 := [2][2]int{{line2.s.x, line2.s.y}, {line2.e.x, line2.e.y}}
+
+	l1_horizontal := l1[0][0] == l1[1][0]
+	l2_horizontal := l2[0][0] == l2[1][0]
+	if l1_horizontal == l2_horizontal do return false
+
+	if l1_horizontal {
+
+		min_x_l1 := min(l1[0][0], l1[1][0])
+		max_x_l1 := max(l1[0][0], l1[1][0])
+
+		min_y_l2 := min(l2[0][1], l2[1][1])
+		max_y_l2 := max(l2[0][1], l2[1][1])
+
+		return(
+			l2[0][0] >= min_x_l1 &&
+			l2[0][0] <= max_x_l1 &&
+			l1[0][1] >= min_y_l2 &&
+			l1[0][1] <= max_y_l2 \
+		)
+	} else {
+		min_x_l2 := min(l2[0][0], l2[1][0])
+		max_x_l2 := max(l2[0][0], l2[1][0])
+
+		min_y_l1 := min(l1[0][1], l1[1][1])
+		max_y_l2 := max(l1[0][1], l1[1][1])
+
+		return(
+			l1[0][0] >= min_x_l2 &&
+			l1[0][0] <= max_x_l2 &&
+			l2[0][1] >= min_y_l1 &&
+			l2[0][1] <= max_y_l2 \
+		)
+	}
+}
+
 
 intersect :: proc(l1: [2][2]int, line: Line) -> bool {
 	l2 := [2][2]int{{line.s.x, line.s.y}, {line.e.x, line.e.y}}
@@ -251,11 +289,50 @@ intersect :: proc(l1: [2][2]int, line: Line) -> bool {
 count_intersections :: proc(l: [2][2]int, lines: []Line) -> int {
 	count := 0
 	for o_l in lines {
-		fmt.println("check intersect:", l, o_l)
+		//fmt.println("check intersect:", l, o_l)
 		if intersect(l, o_l) do count += 1
 	}
 	return count
 }
+
+check_point_in_bounds :: proc(
+	p: Point,
+	lines: []Line,
+	max_x: int,
+	max_y: int,
+) -> (
+	inside: bool,
+	count_left: int,
+	count_right: int,
+	count_bottom: int,
+	count_top: int,
+) {
+	inside = false
+
+	left_line := [2][2]int{{0, p.y}, {p.x, p.y}}
+	right_line := [2][2]int{{p.x, p.y}, {max_x, p.y}}
+	top_line := [2][2]int{{p.x, 0}, {p.x, p.y}}
+	bottom_line := [2][2]int{{p.x, p.y}, {p.x, max_y}}
+
+	count_left = count_intersections(left_line, lines[:])
+	//fmt.println("count_left", p, count_left)
+	if count_left % 2 == 0 do inside = true
+
+	count_right = count_intersections(right_line, lines[:])
+	//fmt.println("count_right", p, count_right)
+	if count_right % 2 == 0 do inside = true
+
+	count_top = count_intersections(top_line, lines[:])
+	//fmt.println("count_top", p, count_top)
+	if count_top % 2 == 0 do inside = true
+
+	count_bottom = count_intersections(bottom_line, lines[:])
+	//fmt.println("count_bottom", p, count_bottom)
+	if count_bottom % 2 == 0 do inside = true
+
+	return
+}
+
 
 main :: proc() {
 
@@ -300,59 +377,81 @@ main :: proc() {
 			inner_reds_loop: for j := i + 1; j < len(f.reds); j += 1 {
 				p_2 := f.reds[j]
 
+				fmt.println("Checking rect:", p_1, p_2)
+
 				//check valid rect
 				//no other "red" can be "inside" this rect
-				for o_r in f.reds {
+				low_x := p_1.x
+				if p_2.x < p_1.x do low_x = p_2.x
+				high_x := p_1.x
+				if p_2.x > p_1.x do high_x = p_2.x
+				if high_x == low_x do continue inner_reds_loop
 
-					if p_1.y > p_2.y {
-						if o_r.y > p_1.y || o_r.y < p_2.y {
-							continue inner_reds_loop
-						}
-					} else if p_1.y < p_2.y {
-						if o_r.y < p_1.y || o_r.y > p_2.y {
-							continue inner_reds_loop
-						}
-					} else {
-						//same line continue, because resulting rect would have size 0
+
+				low_y := p_1.y
+				if p_2.y < p_1.y do low_y = p_2.y
+				high_y := p_1.y
+				if p_2.y > p_1.y do high_y = p_2.y
+				if high_y == low_y do continue inner_reds_loop
+
+				for o_r in f.reds {
+					if o_r.y < high_y && o_r.y > low_y && o_r.x < high_x && o_r.x > low_x {
+						fmt.println("found red inside, not valid")
 						continue inner_reds_loop
 					}
-
-					if p_1.x > p_2.x {
-						if o_r.x > p_1.x || o_r.x < p_2.x {
-							continue inner_reds_loop
-						}
-					} else if p_1.x < p_2.x {
-						if o_r.x < p_1.x || o_r.x > p_2.x {
-							continue inner_reds_loop
-						}
-					} else {
-						//same line continue, because resulting rect would have size 0
+				}
+				// check for both other corners if they are inside the polygon
+				other_corner_1: Point = {
+					x = p_1.x,
+					y = p_2.y,
+				}
+				other_corner_2: Point = {
+					x = p_2.x,
+					y = p_1.y,
+				}
+				/*
+				res_1, c_1_l, c_1_r, c_1_b, c_1_t := check_point_in_bounds(
+					other_corner_1,
+					f.lines,
+					max_x,
+					max_y,
+				)
+				res_2, c_2_l, c_2_r, c_2_b, c_2_t := check_point_in_bounds(
+					other_corner_2,
+					f.lines,
+					max_x,
+					max_y,
+				)
+				fmt.println("check other result 1: ", res_1, c_1_l, c_1_r, c_1_b, c_1_t)
+				fmt.println("check other result 2: ", res_2, c_2_l, c_2_r, c_2_b, c_2_t)
+*/
+				// check if the rectangle lines area intersecting any polygon lines
+				l1 := Line{p_1, other_corner_1}
+				l2 := Line{other_corner_1, p_2}
+				l3 := Line{p_2, other_corner_2}
+				l4 := Line{other_corner_2, p_1}
+				for l in f.lines {
+					if greedy_intersect_lines(l, l1) {
+						fmt.println("found intersection l1", l1, l)
+						continue inner_reds_loop
+					}
+					if greedy_intersect_lines(l, l2) {
+						fmt.println("found intersection l2", l2, l)
+						continue inner_reds_loop
+					}
+					if greedy_intersect_lines(l, l3) {
+						fmt.println("found intersection l3", l3, l)
+						continue inner_reds_loop
+					}
+					if greedy_intersect_lines(l, l4) {
+						fmt.println("found intersection l4", l4, l)
 						continue inner_reds_loop
 					}
 				}
 
-				//the rect actually has to span over the field
-				center := [2]int{(p_1.x + p_2.x) / 2, (p_1.y + p_2.y) / 2}
-				left_line := [2][2]int{center, {0, center[1]}}
-				right_line := [2][2]int{center, {center[1], max_y}}
-				top_line := [2][2]int{center, {center[0], 0}}
-				bottom_line := [2][2]int{center, {center[0], max_x}}
 
-				count_left := count_intersections(left_line, f.lines[:])
-				fmt.println("count_left", count_left, left_line, p_1, p_2)
-				//if count_left % 2 == 0 do continue inner_reds_loop
-
-				count_right := count_intersections(right_line, f.lines[:])
-				//if count_right % 2 == 0 do continue inner_reds_loop
-
-				count_top := count_intersections(top_line, f.lines[:])
-				//if count_top % 2 == 0 do continue inner_reds_loop
-
-				count_bottom := count_intersections(bottom_line, f.lines[:])
-				//if count_bottom % 2 == 0 do continue inner_reds_loop
-
-				dist_x := abs(p_1.x - p_2.x) + 1
-				dist_y := abs(p_1.y - p_2.y) + 1
+				dist_x := abs(p_1.x - p_2.x)
+				dist_y := abs(p_1.y - p_2.y)
 
 				append(
 					&areas,
@@ -367,7 +466,11 @@ main :: proc() {
 			}
 		}
 	}
-	fmt.println("areas", areas)
+	for a in areas {
+		fmt.println("----")
+		fmt.println(a)
+		fmt.println("----")
+	}
 
 
 	slice.sort_by(areas[:], proc(a, b: Area) -> bool {
@@ -381,10 +484,25 @@ main :: proc() {
 	design_width := f32(max_x)
 	design_height := f32(max_y)
 
+	current_area_index := 0
+
+	timer := f32(0.0)
 	camera := rl.Camera2D{}
 	// have to visualize this I fear
 	for !rl.WindowShouldClose() {
 		rl.ClearBackground(rl.RAYWHITE)
+
+		// Accumulate the time passed since the last frame
+		timer += rl.GetFrameTime()
+
+		if rl.IsMouseButtonPressed(.LEFT) {
+			current_area_index += 1
+
+			if current_area_index >= len(areas) {
+				current_area_index = 0
+			}
+		}
+
 
 		screen_w := f32(rl.GetScreenWidth())
 		screen_h := f32(rl.GetScreenHeight())
@@ -405,18 +523,24 @@ main :: proc() {
 			}
 		}
 
-		for a in areas {
-			rec := rl.Rectangle {
-				x      = min(f32(a.c_1.x), f32(a.c_1.x)),
-				y      = min(f32(a.c_2.y), f32(a.c_2.y)),
-				width  = abs(f32(a.c_1.y - a.c_2.y)),
-				height = abs(f32(a.c_1.x - a.c_2.x)),
-			}
-			rl.DrawRectangleLinesEx(rec, 3.0 / scale, rl.BLUE)
+		a := areas[current_area_index]
+		rec := rl.Rectangle {
+			x      = f32(min(a.c_1.x, a.c_2.x)),
+			y      = f32(min(a.c_1.y, a.c_2.y)),
+			width  = f32(abs(a.c_1.x - a.c_2.x)),
+			height = f32(abs(a.c_1.y - a.c_2.y)),
 		}
-
-
+		rl.DrawRectangleLinesEx(rec, 3.0 / scale, rl.BLUE)
 		rl.EndMode2D()
+
+
+		rl.DrawText(
+			fmt.ctprintf("p_1: %v -- p_2: %v", a.c_1, a.c_2),
+			5, //i32(rec.x * scale),
+			5, //i32(rec.y * scale),
+			20,
+			rl.BLACK,
+		)
 		rl.EndDrawing()
 	}
 }
