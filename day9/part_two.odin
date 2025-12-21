@@ -466,8 +466,9 @@ main :: proc() {
 			}
 		}
 	}
+
+	fmt.println("----")
 	for a in areas {
-		fmt.println("----")
 		fmt.println(a)
 		fmt.println("----")
 	}
