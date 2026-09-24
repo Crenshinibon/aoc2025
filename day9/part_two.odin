@@ -424,7 +424,7 @@ main :: proc() {
 				)
 				fmt.println("check other result 1: ", res_1, c_1_l, c_1_r, c_1_b, c_1_t)
 				fmt.println("check other result 2: ", res_2, c_2_l, c_2_r, c_2_b, c_2_t)
-*/
+        */
 				// check if the rectangle lines area intersecting any polygon lines
 				l1 := Line{p_1, other_corner_1}
 				l2 := Line{other_corner_1, p_2}
